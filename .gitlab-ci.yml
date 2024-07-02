@@ -1,0 +1,53 @@
+include:
+
+  # include the entire docker pipeline to build the backend docker image
+  - project: 'resengit/gitlab/pipeline-helpers'
+    ref: main
+    file: '/pipelines/docker-image-multi-arch.yaml'
+
+  # also include the templates for golang to define the job to build the shell client binary
+  - project: 'resengit/gitlab/pipeline-helpers'
+    ref: main
+    file: '/jobs/golang.yaml'
+
+.parallel-matrix-config:
+  parallel:
+    matrix:
+      - PH_CUSTOM_PLATFORM: [linux/amd64, linux/arm64, linux/arm/v7]
+
+      #- PH_CUSTOM_PLATFORM: [linux/amd64, linux/arm64/v8, linux/arm/v7]
+
+
+cli-compile:
+  timeout: 3h
+  parallel: !reference [.parallel-matrix-config, parallel]
+  tags:
+    - platform-$PH_CUSTOM_PLATFORM
+  extends: .go-job-compile
+  variables:
+    PH_GO_OUTPUT_FILENAME: telemetruum-agent
+    PH_GO_OUTPUT_APPEND_PLATFORM_SLUG: "true"
+    
+
+build_docker:
+  parallel: !reference [.parallel-matrix-config, parallel]
+  tags:
+    - platform-$PH_CUSTOM_PLATFORM
+  variables:
+    PH_DOCKER_IMAGE_TAG_APPEND_PLATFORM_SLUG: "true"
+
+container_scanning:
+  parallel: !reference [.parallel-matrix-config, parallel]
+  tags:
+    - platform-$PH_CUSTOM_PLATFORM
+
+golang-tests:
+  stage: test
+  image: golang:1.22.4
+  script:
+    - go install gotest.tools/gotestsum@latest
+    - gotestsum --junitfile report.xml --format testname
+  artifacts:
+    when: always
+    reports:
+      junit: report.xml

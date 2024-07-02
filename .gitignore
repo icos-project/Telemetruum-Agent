@@ -1,0 +1,5 @@
+telemetruum-agent
+test-hostfs/
+output/
+test/
+report.xml
